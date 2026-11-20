@@ -463,6 +463,8 @@
       a += net[0][i]; b += net[0][i] + net[1][i] + net[2][i];
       cumInt.push(+a.toFixed(3)); cumAll.push(+b.toFixed(3));
     });
+    INT = { days, parts, spnbDirect };
+    syncTableToWindow(si, days.length - 1);
     const sub = document.getElementById("int-sub");
     if (sub) sub.textContent = `Since ${niceDate(days[si])}: stabilization ${usdM(a)} · all BCCR net MONEX purchases ${usdM(b)}.`;
     const catAxis = (extra) => Object.assign({
@@ -508,6 +510,127 @@
           barMaxWidth: 8, itemStyle: { color: colors[k] } })),
       ],
     }), true);
+  }
+
+  // ---------- intervention detail table ----------
+  // Date-filtered, groupable breakdown of table 850. The From/To inputs follow the chart
+  // window (range buttons, zoom panel, axis wheel), and editing them zooms the chart.
+  let INT = null, tableSyncing = false;
+  const $ = (id) => document.getElementById(id);
+  const COLS = [
+    { k: "stabB", h: "Bought", g: "Stabilization" }, { k: "stabS", h: "Sold", g: "Stabilization" }, { k: "stabN", h: "Net", g: "Stabilization", strong: true },
+    { k: "ownB", h: "Bought", g: "Own-account" }, { k: "ownS", h: "Sold", g: "Own-account" },
+    { k: "spB", h: "Bought", g: "For SPNB in MONEX" }, { k: "spS", h: "Sold", g: "For SPNB in MONEX" },
+    { k: "allN", h: "Net", g: "All BCCR in MONEX", strong: true },
+    { k: "dS", h: "Sold", g: "Direct with SPNB (off-MONEX)" }, { k: "dB", h: "Bought", g: "Direct with SPNB (off-MONEX)" },
+    { k: "cumStab", h: "Stabilization", g: "Cumulative from start" }, { k: "cumAll", h: "All in MONEX", g: "Cumulative from start" },
+  ];
+  function dayRow(d) {
+    const [st, ow, sp] = INT.parts;
+    const g = (m) => m.get(d) || 0;
+    const r = { stabB: g(st.b), stabS: g(st.s), ownB: g(ow.b), ownS: g(ow.s), spB: g(sp.b), spS: g(sp.s),
+      dS: g(INT.spnbDirect.s), dB: g(INT.spnbDirect.b) };
+    r.stabN = r.stabB - r.stabS;
+    r.allN = r.stabN + r.ownB - r.ownS + r.spB - r.spS;
+    r.active = r.stabB || r.stabS || r.ownB || r.ownS || r.spB || r.spS || r.dS || r.dB;
+    return r;
+  }
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function periodOf(d, by) {
+    if (by === "year") return [d.slice(0, 4), d.slice(0, 4)];
+    if (by === "month") return [d.slice(0, 7), `${MONTHS[+d.slice(5, 7) - 1]} ${d.slice(0, 4)}`];
+    if (by === "week") {
+      const dt = new Date(d + "T00:00:00Z"); dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));
+      const k = dt.toISOString().slice(0, 10);
+      return [k, "Week of " + niceDate(k)];
+    }
+    return [d, niceDate(d)];
+  }
+  function tableRows() {
+    const from = $("int-from").value, to = $("int-to").value, by = $("int-group").value;
+    const onlyActive = $("int-active").checked;
+    const groups = new Map();
+    let cs = 0, ca = 0;
+    const total = Object.fromEntries(COLS.map((c) => [c.k, 0]));
+    for (const d of INT.days) {
+      if ((from && d < from) || (to && d > to)) continue;
+      const r = dayRow(d);
+      cs += r.stabN; ca += r.allN;
+      const [key, label] = periodOf(d, by);
+      let g = groups.get(key);
+      if (!g) { g = { key, label, active: false, ...Object.fromEntries(COLS.map((c) => [c.k, 0])) }; groups.set(key, g); }
+      COLS.forEach((c) => { if (!c.k.startsWith("cum")) { g[c.k] += r[c.k]; total[c.k] += r[c.k]; } });
+      g.cumStab = cs; g.cumAll = ca; g.active = g.active || !!r.active;
+    }
+    total.cumStab = cs; total.cumAll = ca;
+    const rows = [...groups.values()].filter((g) => !onlyActive || g.active).reverse();   // newest first
+    return { rows, total, n: groups.size };
+  }
+  const cell = (v) => (Math.abs(v) < 0.0005 ? "–" : (v < 0 ? "−" : "") + fmt(Math.abs(v), 1));
+  function renderIntTable() {
+    if (!INT || !$("int-table")) return;
+    const { rows, total, n } = tableRows();
+    const groupsHead = [];
+    COLS.forEach((c) => { const l = groupsHead[groupsHead.length - 1]; if (l && l.g === c.g) l.n++; else groupsHead.push({ g: c.g, n: 1 }); });
+    const by = $("int-group").value;
+    const unit = { day: "Date", week: "Week", month: "Month", year: "Year" }[by];
+    let h = `<thead><tr><th rowspan="2" scope="col" class="first">${unit}</th>` +
+      groupsHead.map((x) => `<th colspan="${x.n}" scope="colgroup">${x.g}</th>`).join("") + "</tr><tr>" +
+      COLS.map((c) => `<th scope="col">${c.h}</th>`).join("") + "</tr></thead><tbody>";
+    const plural = { day: "days", week: "weeks", month: "months", year: "years" }[by];
+    h += `<tr class="total"><th scope="row" class="first" title="${rows.length} ${plural} shown of ${n} in the date range">Total · ${rows.length} ${plural}</th>` +
+      COLS.map((c) => `<td${c.strong ? ' class="strong"' : ""}>${cell(total[c.k])}</td>`).join("") + "</tr>";
+    h += rows.map((r) => `<tr><th scope="row" class="first">${r.label}</th>` +
+      COLS.map((c) => `<td class="${[c.strong ? "strong" : "", c.k.startsWith("cum") ? "cum" : "", r[c.k] < -0.0005 ? "neg" : ""].join(" ").trim()}">${cell(r[c.k])}</td>`).join("") + "</tr>").join("");
+    if (!rows.length) h += `<tr><td colspan="${COLS.length + 1}" class="empty">No BCCR operations in this period.</td></tr>`;
+    $("int-table").innerHTML = h + "</tbody>";
+  }
+  // Chart window -> inputs.
+  function syncTableToWindow(si, ei) {
+    if (!INT || !$("int-from")) return;
+    tableSyncing = true;
+    $("int-from").min = $("int-to").min = INT.days[0];
+    $("int-from").max = $("int-to").max = last(INT.days);
+    $("int-from").value = INT.days[Math.max(0, si)];
+    $("int-to").value = INT.days[Math.min(INT.days.length - 1, ei)];
+    tableSyncing = false;
+    renderIntTable();
+  }
+  function initIntTable() {
+    if (!$("int-table")) return;
+    const c = chart("c-intervention");
+    c.on("datazoom", () => {
+      if (tableSyncing || !INT) return;
+      const z = c.getOption().dataZoom[0];
+      syncTableToWindow(Math.round(z.startValue), Math.round(z.endValue));
+    });
+    // Inputs -> chart window (and table).
+    const apply = () => {
+      if (tableSyncing || !INT) return;
+      let si = INT.days.findIndex((d) => d >= $("int-from").value); if (si < 0) si = 0;
+      let ei = INT.days.length - 1;
+      while (ei > 0 && INT.days[ei] > $("int-to").value) ei--;
+      if (ei < si) ei = si;
+      tableSyncing = true;
+      c.dispatchAction({ type: "dataZoom", dataZoomIndex: 0, startValue: si, endValue: ei });
+      tableSyncing = false;
+      renderIntTable();
+    };
+    $("int-from").addEventListener("change", apply);
+    $("int-to").addEventListener("change", apply);
+    $("int-group").addEventListener("change", renderIntTable);
+    $("int-active").addEventListener("change", renderIntTable);
+    $("int-csv").addEventListener("click", () => {
+      const { rows, total } = tableRows();
+      const head = ["Period", ...COLS.map((c) => `${c.g} - ${c.h} (US$ M)`)];
+      const line = (label, r) => [label, ...COLS.map((c) => r[c.k].toFixed(3))].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
+      const csv = [head.map((v) => `"${v}"`).join(","), line("Total", total), ...rows.map((r) => line(r.key, r))].join("\n");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+      a.download = `bccr-intervention_${$("int-from").value}_${$("int-to").value}_${$("int-group").value}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
   }
 
   function renderPremium(t) {
@@ -666,6 +789,7 @@
         `data refreshed ${u.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Costa_Rica" })} CR time`;
       document.getElementById("freshness").textContent =
         `Latest MONEX session: ${niceDate(last(S.monex.d)[0])}. ${S.monex.d.length.toLocaleString()} sessions since ${niceDate(S.monex.d[0][0])}.`;
+      initIntTable();
       renderAll();
     })
     .catch((e) => {

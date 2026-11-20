@@ -51,6 +51,22 @@
       <p class="sub" id="int-sub"></p>
     </div>
     <div class="chart tall" id="c-intervention" role="img" aria-label="Cumulative BCCR foreign-exchange intervention with daily net operations"></div>
+    <div class="detail">
+      <h4 id="int-table-h">Detail, US$ millions</h4>
+      <p class="note">Every BCCR operation in table 850 for the dates below, newest first. The dates follow the chart window (range buttons, zoom panel, axis scroll); change them to zoom the chart. "Net" is bought minus sold. Direct sales to the <abbr title="Sector público no bancario: non-bank public sector">SPNB</abbr> happen outside MONEX and are not in the MONEX totals. Cumulative columns start at the From date.</p>
+      <form class="tbl-controls" onsubmit="return false" aria-controls="int-table">
+        <label>From <input type="date" id="int-from"></label>
+        <label>To <input type="date" id="int-to"></label>
+        <label>Group by
+          <select id="int-group"><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option><option value="year">Year</option></select>
+        </label>
+        <label class="check"><input type="checkbox" id="int-active" checked> Only periods with operations</label>
+        <button type="button" id="int-csv" class="btn">Download CSV</button>
+      </form>
+      <div class="tbl-wrap" tabindex="0" role="region" aria-labelledby="int-table-h">
+        <table id="int-table" class="data"></table>
+      </div>
+    </div>
   </section>
 
   <section class="grid2">
