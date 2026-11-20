@@ -315,14 +315,25 @@
   }
 
   // ---------- charts ----------
+  // MONEX uses a category axis (one slot per trading session) so weekends and holidays
+  // leave no gaps between candles; a time axis would space them by calendar day.
+  const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const sessionLabel = (d) => `${+d.slice(8, 10)} ${MON[+d.slice(5, 7) - 1]} \u2019${d.slice(2, 4)}`;
   function renderMonex(t) {
     const m = S.monex.d;
-    const ts = m.map((r) => toTs(r[0]));
-    const endTs = last(ts);
-    const ohlc = m.map((r, i) => [ts[i], r[1], r[4], r[3], r[2]]);   // ECharts: open, close, low, high
-    const vwap = m.map((r, i) => [ts[i], r[5]]);
-    const vol = m.map((r, i) => ({ value: [ts[i], r[6] / 1e6],
+    const days = m.map((r) => r[0]);
+    const startTs = rangeStart(toTs(last(days)));
+    let startIdx = 0;
+    if (startTs != null) { startIdx = days.findIndex((d) => toTs(d) >= startTs); if (startIdx < 0) startIdx = 0; }
+    const ohlc = m.map((r) => [r[1], r[4], r[3], r[2]]);   // ECharts: open, close, low, high
+    const vwap = m.map((r) => r[5]);
+    const vol = m.map((r) => ({ value: r[6] / 1e6,
       itemStyle: { color: r[4] >= r[1] ? t.up : t.down, opacity: 0.55 } }));
+    const catAxis = (extra) => Object.assign({
+      type: "category", data: days, boundaryGap: true, axisLine: { lineStyle: { color: t.line } }, axisTick: { show: false },
+      axisLabel: { color: t.ink3, fontFamily: t.mono, fontSize: 11, hideOverlap: true, formatter: sessionLabel },
+      axisPointer: { label: { formatter: (p) => niceDate(p.value) } }, splitLine: { show: false },
+    }, extra);
     chart("c-monex").setOption(Object.assign(base(t), {
       legend: Object.assign(base(t).legend, { data: ["Session candle", "VWAP", "Volume (US$ M)"] }),
       grid: [
@@ -330,11 +341,11 @@
         { left: 8, right: 16, top: "72%", bottom: 54, containLabel: true },
       ],
       axisPointer: { link: [{ xAxisIndex: "all" }] },
-      xAxis: [timeAxis(t, { gridIndex: 0, axisLabel: { show: false } }), timeAxis(t, { gridIndex: 1 })],
+      xAxis: [catAxis({ gridIndex: 0, axisLabel: { show: false } }), catAxis({ gridIndex: 1 })],
       yAxis: [valAxis(t, { gridIndex: 0, axisLabel: { color: t.ink3, fontFamily: t.mono, fontSize: 11, formatter: "₡{value}" } }),
         valAxis(t, { gridIndex: 1, scale: false, splitNumber: 2, axisLabel: { color: t.ink3, fontFamily: t.mono, fontSize: 11, formatter: "${value}M" } })],
-      dataZoom: zoom(endTs, [0, 1], 0, true).map((z) => z.type === "slider"
-        ? Object.assign(z, { textStyle: { color: t.ink3 }, fillerColor: "rgba(127,140,155,0.15)",
+      dataZoom: zoom(0, [0, 1], 0, true).map((z) => z.type === "slider"
+        ? Object.assign(z, { startValue: startIdx, endValue: days.length - 1, start: undefined, textStyle: { color: t.ink3 }, fillerColor: "rgba(127,140,155,0.15)",
             handleStyle: { color: t.panel, borderColor: t.ink3 }, moveHandleStyle: { color: t.line },
             dataBackground: { lineStyle: { color: t.ink3, width: 1 }, areaStyle: { color: t.grid } } })
         : z),
