@@ -1,0 +1,60 @@
+# Pulls fresh BCCR data and redeploys the static dashboard to GitHub Pages.
+# Needs repo secret BCCR_TOKEN (BCCR "Mi Perfil → Generar token").
+# Lives at the root of the dashboard's own public repo (.github/workflows/refresh.yml).
+name: Refresh data & deploy
+
+on:
+  schedule:
+    # Weekdays 20:05 UTC = 14:05 Costa Rica (UTC-6, no DST), after the MONEX session closes.
+    # GitHub may start scheduled runs a few minutes late.
+    - cron: "5 20 * * 1-5"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write   # keepalive commit only
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fetch BCCR series
+        env:
+          BCCR_TOKEN: ${{ secrets.BCCR_TOKEN }}
+        run: python fetch.py
+      # GitHub disables scheduled workflows in public repos after 60 days without commits.
+      # An empty commit every ~45 days keeps the cron alive; GITHUB_TOKEN pushes don't retrigger.
+      - name: Keep schedule alive
+        if: github.event_name == 'schedule'
+        run: |
+          last=$(git log -1 --format=%ct)
+          if [ $(( $(date +%s) - last )) -gt $(( 45 * 86400 )) ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "chore: keep scheduled refresh alive"
+            git push
+          fi
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

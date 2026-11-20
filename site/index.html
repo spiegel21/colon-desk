@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Colón Desk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="USD/CRC, rates, inflation and activity from the Banco Central de Costa Rica, refreshed daily.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-inner">
+    <div class="brand">
+      <h1>Colón Desk</h1>
+      <p class="sub">USD/CRC · rates · prices · activity — <span id="updated">loading BCCR data…</span></p>
+    </div>
+    <div class="ranges" role="group" aria-label="Time range">
+      <button type="button" data-range="1M">1M</button>
+      <button type="button" data-range="3M">3M</button>
+      <button type="button" data-range="6M">6M</button>
+      <button type="button" data-range="1Y" aria-pressed="true">1Y</button>
+      <button type="button" data-range="3Y">3Y</button>
+      <button type="button" data-range="5Y">5Y</button>
+      <button type="button" data-range="ALL">All</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="tiles" id="tiles" aria-label="Latest readings"></section>
+
+  <section class="block">
+    <div class="block-head">
+      <h2>MONEX USD/CRC</h2>
+      <p>Daily session open–high–low–close with the volume-weighted average price (VWAP, BCCR indicator 3439). Bars below: USD traded.</p>
+    </div>
+    <div class="chart tall" id="c-monex" role="img" aria-label="MONEX candlestick chart with VWAP and traded volume"></div>
+  </section>
+
+  <section class="grid2">
+    <div class="block">
+      <div class="block-head">
+        <h2>MONEX vs BCCR reference</h2>
+        <p>MONEX VWAP minus the mid of the BCCR reference buy/sell rate, in colones.</p>
+      </div>
+      <div class="chart" id="c-premium" role="img" aria-label="MONEX premium to BCCR reference mid"></div>
+    </div>
+    <div class="block">
+      <div class="block-head">
+        <h2>Realized volatility</h2>
+        <p>20-session standard deviation of VWAP log returns, annualized.</p>
+      </div>
+      <div class="chart" id="c-vol" role="img" aria-label="20-session realized volatility of USD/CRC"></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head">
+      <h2>Policy &amp; money-market rates</h2>
+      <p>Tasa de política monetaria (TPM), tasa básica pasiva (TBP) and USD SOFR overnight.</p>
+    </div>
+    <div class="chart" id="c-rates" role="img" aria-label="TPM, TBP and SOFR over time"></div>
+  </section>
+
+  <section class="grid2">
+    <div class="block">
+      <div class="block-head head-row">
+        <div>
+          <h2>TRI curve</h2>
+          <p>Tasa de referencia interbancaria by tenor: latest vs 3 and 12 months earlier.</p>
+        </div>
+        <div class="seg" role="group" aria-label="Curve currency">
+          <button type="button" data-ccy="CRC" aria-pressed="true">CRC</button>
+          <button type="button" data-ccy="USD">USD</button>
+        </div>
+      </div>
+      <div class="chart" id="c-tri" role="img" aria-label="TRI interbank curve snapshots"></div>
+    </div>
+    <div class="block">
+      <div class="block-head">
+        <h2>US Treasury curve</h2>
+        <p>6M bill to 30Y bond: latest vs 3 and 12 months earlier.</p>
+      </div>
+      <div class="chart" id="c-ust" role="img" aria-label="US Treasury curve snapshots"></div>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="block">
+      <div class="block-head">
+        <h2>Inflation vs target</h2>
+        <p>CPI year-on-year and the 12-month expectations survey median. Shaded: BCCR target 3% ± 1 pp.</p>
+      </div>
+      <div class="chart" id="c-inf" role="img" aria-label="Inflation versus target band"></div>
+    </div>
+    <div class="block">
+      <div class="block-head">
+        <h2>Economic activity</h2>
+        <p>IMAE trend-cycle, year-on-year change (2022 = 100 series).</p>
+      </div>
+      <div class="chart" id="c-imae" role="img" aria-label="IMAE year-on-year growth"></div>
+    </div>
+  </section>
+
+  <section class="grid3">
+    <div class="block">
+      <div class="block-head"><h2>Net international reserves</h2><p>USD billions, month-end.</p></div>
+      <div class="chart short" id="c-rin" role="img" aria-label="Net international reserves"></div>
+    </div>
+    <div class="block">
+      <div class="block-head"><h2>EUR/USD</h2><p>USD per euro.</p></div>
+      <div class="chart short" id="c-eur" role="img" aria-label="EUR/USD"></div>
+    </div>
+    <div class="block">
+      <div class="block-head"><h2>Gold</h2><p>USD per troy ounce.</p></div>
+      <div class="chart short" id="c-gold" role="img" aria-label="Gold price"></div>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  <p>Source: Banco Central de Costa Rica, Sistema de Divulgación de Datos Económicos (SDDE) API. Indicators: 317/318 reference rate · 219 MONEX session table · 3541 TPM · 423 TBP · 432 TRI · 90656 SOFR · 3035–3042 UST · 89638 CPI · 3809 inflation expectations · 95262 IMAE · 304 NIR · 333 EUR · 1979 gold.</p>
+  <p id="freshness"></p>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.6.0/echarts.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
