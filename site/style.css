@@ -129,3 +129,10 @@ abbr[title] { text-decoration: underline dotted; text-decoration-color: var(--in
 .glossary dt { font: 500 12.5px/1.45 var(--font-data); color: var(--ink); }
 .glossary dd { margin: 0; font-size: 13px; color: var(--ink-2); }
 @media (max-width: 480px) { .glossary dl > div { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+
+/* Axis strip (date labels + zoom panel) is the wheel-zoom target: cue it on hover. */
+.chart { position: relative; }
+.chart::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 46px; pointer-events: none;
+  background: var(--grid); opacity: 0; transition: opacity .15s; border-radius: 0 0 6px 6px; }
+.chart.axis-hot::after { opacity: .55; }
+.chart.axis-hot, .chart.axis-hot canvas { cursor: ew-resize !important; }

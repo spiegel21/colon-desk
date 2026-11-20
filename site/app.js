@@ -79,40 +79,101 @@
   }, extra);
 
   // ECharts' "inside" dataZoom swallows every wheel event over a chart (even with
-  // zoomOnMouseWheel: "ctrl"), which hijacked page scrolling. So the window is held by a
-  // slider dataZoom: hidden on most charts, visible under the MONEX chart. Ctrl+wheel (and
-  // trackpad pinch, which arrives as Ctrl+wheel) zooms via attachCtrlZoom below; a plain
-  // wheel is never intercepted, so the page scrolls normally.
-  function zoom(endTs, xIdx = [0], minMonths = 0, slider = false) {
+  // zoomOnMouseWheel: "ctrl"), which hijacked page scrolling. So each time chart gets a
+  // visible slider (the zoom panel) and wheel input is handled by attachAxisZoom below,
+  // only in the axis strip under the plot (date labels + zoom panel) or with Ctrl held.
+  // A plain wheel over the plot itself is never intercepted, so the page scrolls normally.
+  let T = null;   // current theme, set by renderAll; styles the zoom panel
+  const PANEL_H = 16, PANEL_GAP = 30;   // zoom-panel height, extra grid bottom it needs
+  function zoom(endTs, xIdx = [0], minMonths = 0) {
     const start = rangeStart(endTs, minMonths);
-    return [{ type: "slider", show: slider, xAxisIndex: xIdx, filterMode: "filter", height: 18, bottom: 4,
-      brushSelect: false, showDetail: false, borderColor: "transparent",
+    const t = T || theme();
+    return [{ type: "slider", show: true, xAxisIndex: xIdx, filterMode: "filter", height: PANEL_H, bottom: 4,
+      brushSelect: false, showDetail: false, borderColor: "transparent", zoomLock: false,
+      fillerColor: "rgba(127,140,155,0.18)", textStyle: { color: t.ink3 },
+      handleSize: "120%", handleStyle: { color: t.panel, borderColor: t.ink3 }, moveHandleSize: 5,
+      moveHandleStyle: { color: t.line }, emphasis: { moveHandleStyle: { color: t.ink3 } },
+      dataBackground: { lineStyle: { color: t.ink3, width: 1 }, areaStyle: { color: t.grid } },
+      selectedDataBackground: { lineStyle: { color: t.ink2, width: 1 }, areaStyle: { color: t.grid } },
       startValue: start == null ? undefined : start, endValue: endTs, start: start == null ? 0 : undefined }];
   }
+  // Make room under the plot for the zoom panel on any chart that has one.
+  function fitPanel(o) {
+    if (!o || !o.dataZoom || !o.dataZoom.some((z) => z.show)) return o;
+    const grids = Array.isArray(o.grid) ? o.grid : [o.grid];
+    const g = grids[grids.length - 1];
+    if (g && typeof g.bottom === "number" && g.bottom < 50) g.bottom += PANEL_GAP;
+    return o;
+  }
 
-  function attachCtrlZoom(id) {
+  function gridRects(c) {
+    const out = [];
+    for (let i = 0; ; i++) {
+      const g = c.getModel().getComponent("grid", i);
+      if (!g) return out;
+      out.push(g.coordinateSystem.getRect());
+    }
+  }
+  // Zone under the mouse: "axis" = the strip below the lowest plot (date labels + zoom
+  // panel), across the plot's width. Everywhere else is "plot" and keeps page scrolling.
+  function zoneAt(c, x, y) {
+    const rs = gridRects(c);
+    if (!rs.length) return { zone: "plot" };
+    const g = rs[rs.length - 1];
+    const left = Math.min(...rs.map((r) => r.x)), right = Math.max(...rs.map((r) => r.x + r.width));
+    const inAxis = y > g.y + g.height && x >= left - 8 && x <= right + 8;
+    return { zone: inAxis ? "axis" : "plot", left, width: right - left };
+  }
+
+  function attachAxisZoom(id) {
     const el = document.getElementById(id);
-    if (el.dataset.ctrlZoom) return;
-    el.dataset.ctrlZoom = "1";
+    if (el.dataset.axisZoom) return;
+    el.dataset.axisZoom = "1";
     el.addEventListener("wheel", (e) => {
-      if (!e.ctrlKey) return;              // plain scroll: leave it to the page
       const c = charts[id];
       const dz = c && c.getOption().dataZoom;
       if (!dz || !dz.length) return;
+      const rect = el.getBoundingClientRect();
+      const x = e.clientX - rect.left, y = e.clientY - rect.top;
+      const z = zoneAt(c, x, y);
+      if (!e.ctrlKey && z.zone !== "axis") return;   // plain scroll over the plot: page scrolls
       e.preventDefault();
       const { start = 0, end = 100 } = dz[0];
-      const rect = el.getBoundingClientRect();
-      const focus = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-      const span = end - start, factor = Math.exp(Math.max(-40, Math.min(40, e.deltaY)) * 0.01);
+      const span = end - start;
+      const w = z.width || rect.width;
+      // Horizontal swipe (or Shift+wheel) pans; vertical wheel / pinch zooms around the cursor.
+      const dx = e.shiftKey ? e.deltaY || e.deltaX : e.deltaX;
+      if (!e.ctrlKey && Math.abs(dx) > Math.abs(e.shiftKey ? 0 : e.deltaY)) {
+        let ns = start + (dx / w) * span;
+        ns = Math.min(Math.max(0, ns), 100 - span);
+        c.dispatchAction({ type: "dataZoom", dataZoomIndex: 0, start: ns, end: ns + span });
+        return;
+      }
+      const focus = Math.min(1, Math.max(0, (x - (z.left || 0)) / w));
+      const factor = Math.exp(Math.max(-40, Math.min(40, e.deltaY)) * 0.01);
       const nspan = Math.min(100, Math.max(0.5, span * factor));
       let ns = start + (span - nspan) * focus;
       ns = Math.min(Math.max(0, ns), 100 - nspan);
       c.dispatchAction({ type: "dataZoom", dataZoomIndex: 0, start: ns, end: ns + nspan });
     }, { passive: false });
+    // Cue: the axis strip shows a resize cursor and a faint band while hovered.
+    el.addEventListener("mousemove", (e) => {
+      const c = charts[id];
+      if (!c || !(c.getOption().dataZoom || []).length) return;
+      const rect = el.getBoundingClientRect();
+      el.classList.toggle("axis-hot", zoneAt(c, e.clientX - rect.left, e.clientY - rect.top).zone === "axis");
+    });
+    el.addEventListener("mouseleave", () => el.classList.remove("axis-hot"));
   }
 
   function chart(id) {
-    if (!charts[id]) { charts[id] = echarts.init(document.getElementById(id), null, { renderer: "canvas" }); attachCtrlZoom(id); }
+    if (!charts[id]) {
+      const c = echarts.init(document.getElementById(id), null, { renderer: "canvas" });
+      const set = c.setOption.bind(c);
+      c.setOption = (o, ...rest) => set(fitPanel(o), ...rest);
+      charts[id] = c;
+      attachAxisZoom(id);
+    }
     return charts[id];
   }
 
@@ -344,11 +405,7 @@
       xAxis: [catAxis({ gridIndex: 0, axisLabel: { show: false } }), catAxis({ gridIndex: 1 })],
       yAxis: [valAxis(t, { gridIndex: 0, axisLabel: { color: t.ink3, fontFamily: t.mono, fontSize: 11, formatter: "₡{value}" } }),
         valAxis(t, { gridIndex: 1, scale: false, splitNumber: 2, axisLabel: { color: t.ink3, fontFamily: t.mono, fontSize: 11, formatter: "${value}M" } })],
-      dataZoom: zoom(0, [0, 1], 0, true).map((z) => z.type === "slider"
-        ? Object.assign(z, { startValue: startIdx, endValue: days.length - 1, start: undefined, textStyle: { color: t.ink3 }, fillerColor: "rgba(127,140,155,0.15)",
-            handleStyle: { color: t.panel, borderColor: t.ink3 }, moveHandleStyle: { color: t.line },
-            dataBackground: { lineStyle: { color: t.ink3, width: 1 }, areaStyle: { color: t.grid } } })
-        : z),
+      dataZoom: zoom(0, [0, 1], 0).map((z) => Object.assign(z, { startValue: startIdx, endValue: days.length - 1, start: undefined })),
       tooltip: Object.assign(base(t).tooltip, {
         formatter(ps) {
           const i = ps[0].dataIndex, r = m[i];
@@ -480,7 +537,7 @@
 
   function renderAll() {
     if (!S) return;
-    const t = theme();
+    const t = theme(); T = t;
     renderTiles();
     renderMonex(t); renderPremium(t); renderVol(t); renderRates(t);
     renderTri(t); renderUst(t); renderInf(t); renderImae(t);
