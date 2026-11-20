@@ -55,6 +55,15 @@ CUADROS: dict[str, tuple[int, str]] = {
     "tri": (432, "2018/01/01"),
 }
 
+# Foreign direct investment (FDI) tables, stored generically as {indicators: [{code, name, d}]}.
+# key -> (cuadro code, start date, unit)
+FDI_TABLES: dict[str, tuple[int, str, str]] = {
+    "fdi_q_regime": (368, "2000/01/01", "USD mill."),    # quarterly, by special regime
+    "fdi_a_regime": (303, "1997/01/01", "USD mill."),    # annual, by special regime
+    "fdi_a_activity": (304, "1997/01/01", "USD mill."),  # annual, by economic activity
+    "fdi_a_country": (305, "1997/01/01", "USD mill."),   # annual, by country of origin
+}
+
 MONEX_FIELDS = {  # indicator code -> short key (rates in CRC, amounts in USD)
     "3434": "open", "3435": "close", "3436": "low", "3437": "high",
     "3438": "avg", "3439": "vwap", "3441": "trades", "3446": "volume",
@@ -158,6 +167,15 @@ def main() -> None:
         curves[ccy][tenor] = pairs(ind["series"], drop_weekends=True)
     result["tri"] = {"code": code, "label": tab["titulo"], "unit": "%", "freq": "Diaria", "curves": curves}
     print(f"{'tri':12s} {code:>6} CRC={list(curves['CRC'])} USD={list(curves['USD'])}")
+
+    for key, (code, start, unit) in FDI_TABLES.items():
+        tab = get(f"cuadro/{code}/series", window(start), tok)["datos"][0]
+        inds = [{"code": int(ind["codigoIndicador"]), "name": ind["nombreIndicador"].strip(),
+                 "d": pairs(ind["series"])} for ind in tab["indicadores"]]
+        result[key] = {"code": code, "label": tab["titulo"], "unit": unit,
+                       "freq": tab.get("periodicidad", ""), "indicators": inds}
+        last = max((i["d"][-1][0] for i in inds if i["d"]), default=None)
+        print(f"{key:15s} {code:>6} indicators={len(inds)} last={last}")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     payload = {"updated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "series": result}
