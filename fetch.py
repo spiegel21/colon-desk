@@ -55,13 +55,17 @@ CUADROS: dict[str, tuple[int, str]] = {
     "tri": (432, "2018/01/01"),
 }
 
-# Foreign direct investment (FDI) tables, stored generically as {indicators: [{code, name, d}]}.
-# key -> (cuadro code, start date, unit)
-FDI_TABLES: dict[str, tuple[int, str, str]] = {
-    "fdi_q_regime": (368, "2000/01/01", "USD mill."),    # quarterly, by special regime
-    "fdi_a_regime": (303, "1997/01/01", "USD mill."),    # annual, by special regime
-    "fdi_a_activity": (304, "1997/01/01", "USD mill."),  # annual, by economic activity
-    "fdi_a_country": (305, "1997/01/01", "USD mill."),   # annual, by country of origin
+# Whole tables stored generically as {indicators: [{code, name, d}]}.
+# key -> (cuadro code, start date, unit, sparse). `sparse` keeps only non-zero weekday
+# points: the daily intervention table is mostly zeros and would otherwise add ~1 MB.
+TABLES: dict[str, tuple[int, str, str, bool]] = {
+    # Foreign direct investment (FDI)
+    "fdi_q_regime": (368, "2000/01/01", "USD mill.", False),    # quarterly, by special regime
+    "fdi_a_regime": (303, "1997/01/01", "USD mill.", False),    # annual, by special regime
+    "fdi_a_activity": (304, "1997/01/01", "USD mill.", False),  # annual, by economic activity
+    "fdi_a_country": (305, "1997/01/01", "USD mill.", False),   # annual, by country of origin
+    # BCCR FX intervention in MONEX, daily, buys and sells by type of operation
+    "fx_intervention": (850, "2006/01/01", "USD thous.", True),
 }
 
 MONEX_FIELDS = {  # indicator code -> short key (rates in CRC, amounts in USD)
@@ -168,10 +172,14 @@ def main() -> None:
     result["tri"] = {"code": code, "label": tab["titulo"], "unit": "%", "freq": "Diaria", "curves": curves}
     print(f"{'tri':12s} {code:>6} CRC={list(curves['CRC'])} USD={list(curves['USD'])}")
 
-    for key, (code, start, unit) in FDI_TABLES.items():
+    for key, (code, start, unit, sparse) in TABLES.items():
         tab = get(f"cuadro/{code}/series", window(start), tok)["datos"][0]
-        inds = [{"code": int(ind["codigoIndicador"]), "name": ind["nombreIndicador"].strip(),
-                 "d": pairs(ind["series"])} for ind in tab["indicadores"]]
+        inds = []
+        for ind in tab["indicadores"]:
+            d = pairs(ind["series"], drop_weekends=sparse)
+            if sparse:
+                d = [p for p in d if p[1]]
+            inds.append({"code": int(ind["codigoIndicador"]), "name": ind["nombreIndicador"].strip(), "d": d})
         result[key] = {"code": code, "label": tab["titulo"], "unit": unit,
                        "freq": tab.get("periodicidad", ""), "indicators": inds}
         last = max((i["d"][-1][0] for i in inds if i["d"]), default=None)
