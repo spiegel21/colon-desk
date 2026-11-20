@@ -16,11 +16,12 @@
   const toTs = (d) => Date.parse(d + "T00:00:00Z");
   const last = (a) => a[a.length - 1];
 
-  function rangeStart(endTs) {
+  // minMonths keeps low-frequency charts (quarterly FDI) readable on short ranges.
+  function rangeStart(endTs, minMonths = 0) {
     const d = new Date(endTs);
     const m = { "1M": 1, "3M": 3, "6M": 6, "1Y": 12, "3Y": 36, "5Y": 60 }[range];
     if (!m) return null;
-    d.setUTCMonth(d.getUTCMonth() - m);
+    d.setUTCMonth(d.getUTCMonth() - Math.max(m, minMonths));
     return d.getTime();
   }
   // value at or before a timestamp in a [[date, v], ...] series
@@ -77,15 +78,41 @@
     lineStyle: { width: 2, color }, itemStyle: { color }, emphasis: { focus: "series" },
   }, extra);
 
-  function zoom(endTs, xIdx = [0]) {
-    const start = rangeStart(endTs);
-    return [{ type: "inside", xAxisIndex: xIdx, filterMode: "filter",
-      startValue: start == null ? undefined : start, endValue: endTs,
-      start: start == null ? 0 : undefined }];
+  // ECharts' "inside" dataZoom swallows every wheel event over a chart (even with
+  // zoomOnMouseWheel: "ctrl"), which hijacked page scrolling. So the window is held by a
+  // slider dataZoom: hidden on most charts, visible under the MONEX chart. Ctrl+wheel (and
+  // trackpad pinch, which arrives as Ctrl+wheel) zooms via attachCtrlZoom below; a plain
+  // wheel is never intercepted, so the page scrolls normally.
+  function zoom(endTs, xIdx = [0], minMonths = 0, slider = false) {
+    const start = rangeStart(endTs, minMonths);
+    return [{ type: "slider", show: slider, xAxisIndex: xIdx, filterMode: "filter", height: 18, bottom: 4,
+      brushSelect: false, showDetail: false, borderColor: "transparent",
+      startValue: start == null ? undefined : start, endValue: endTs, start: start == null ? 0 : undefined }];
+  }
+
+  function attachCtrlZoom(id) {
+    const el = document.getElementById(id);
+    if (el.dataset.ctrlZoom) return;
+    el.dataset.ctrlZoom = "1";
+    el.addEventListener("wheel", (e) => {
+      if (!e.ctrlKey) return;              // plain scroll: leave it to the page
+      const c = charts[id];
+      const dz = c && c.getOption().dataZoom;
+      if (!dz || !dz.length) return;
+      e.preventDefault();
+      const { start = 0, end = 100 } = dz[0];
+      const rect = el.getBoundingClientRect();
+      const focus = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+      const span = end - start, factor = Math.exp(Math.max(-40, Math.min(40, e.deltaY)) * 0.01);
+      const nspan = Math.min(100, Math.max(0.5, span * factor));
+      let ns = start + (span - nspan) * focus;
+      ns = Math.min(Math.max(0, ns), 100 - nspan);
+      c.dispatchAction({ type: "dataZoom", dataZoomIndex: 0, start: ns, end: ns + nspan });
+    }, { passive: false });
   }
 
   function chart(id) {
-    if (!charts[id]) charts[id] = echarts.init(document.getElementById(id), null, { renderer: "canvas" });
+    if (!charts[id]) { charts[id] = echarts.init(document.getElementById(id), null, { renderer: "canvas" }); attachCtrlZoom(id); }
     return charts[id];
   }
 
@@ -134,21 +161,157 @@
       });
     };
     const rb = last(S.ref_buy.d), rs = last(S.ref_sell.d);
+
+    // FDI: rolling 4-quarter total and the free-zone share of it.
+    const fq = fdi("fdi_q_regime");
+    const tot = fq.byCode[23145] || [], fz = fq.byCode[23150] || [];
+    const sum4 = (s, end) => s.slice(Math.max(0, end - 3), end + 1).reduce((a, p) => a + p[1], 0);
+    const n = tot.length - 1;
+    const fdi4 = n >= 3 ? sum4(tot, n) : null, fdi4prev = n >= 7 ? sum4(tot, n - 4) : null;
+    const fdiSeries = tot.map((p, i) => i >= 3 ? [p[0], sum4(tot, i) / 1e3] : null).filter(Boolean);
+    const fzShare = n >= 3 && fz.length === tot.length ? (sum4(fz, n) / fdi4) * 100 : null;
+    const fzSeries = tot.map((p, i) => i >= 3 && fz[i] ? [p[0], (sum4(fz, i) / sum4(tot, i)) * 100] : null).filter(Boolean);
+    const quarter = (d) => { const x = new Date(d + "T00:00:00Z"); return `Q${Math.floor(x.getUTCMonth() / 3) + 1} ${x.getUTCFullYear()}`; };
+
     document.getElementById("tiles").innerHTML = [
-      tile({ k: "MONEX VWAP", v: `₡${fmt(L[5])}`, d: delta(L[5], P[5], 2, "", true), sparkSeries: vw,
-        asof: niceDate(L[0]), title: "BCCR indicator 3439 — promedio ponderado" }),
-      tile({ k: "BCCR ref sell / buy", v: `₡${fmt(rs[1])}`, d: `<span>buy ₡${fmt(rb[1])} · spread ₡${fmt(rs[1] - rb[1])}</span>`,
-        sparkSeries: S.ref_sell.d, asof: niceDate(rs[0]), title: "BCCR indicators 318 / 317" }),
-      tile({ k: "MONEX volume", v: `$${fmt(L[6] / 1e6, 1)}M`, d: `<span>20d avg $${fmt(avg20, 1)}M · ${fmt(L[7], 0)} trades</span>`,
-        sparkSeries: vol, asof: niceDate(L[0]), title: "BCCR indicator 3446 — monto negociado" }),
-      simple("tpm", "TPM", 2, " pp", { suffix: "%" }),
-      simple("tbp", "TBP", 2, " pp", { suffix: "%" }),
-      simple("ipc_yoy", "CPI y/y", 2, " pp", { suffix: "%" }),
-      simple("exp_inf_12m", "Exp. inflation 12m", 2, " pp", { suffix: "%" }),
-      simple("imae_yoy", "IMAE y/y", 2, " pp", { suffix: "%" }),
-      simple("rin", "Net reserves", 2, "", { prefix: "$", suffix: "B", scale: 1e-3 }),
-      simple("sofr", "SOFR", 2, " pp", { suffix: "%" }),
+      tile({ k: `Dollar price, <abbr title="Volume-weighted average price on MONEX, the wholesale FX market">MONEX VWAP</abbr>`,
+        v: `₡${fmt(L[5])}`, d: delta(L[5], P[5], 2, "", true), sparkSeries: vw,
+        asof: niceDate(L[0]), title: "Average colones paid per dollar in the latest MONEX session, weighted by volume (BCCR 3439)" }),
+      tile({ k: "BCCR reference rate (sell)", v: `₡${fmt(rs[1])}`, d: `<span>buy ₡${fmt(rb[1])}</span>`,
+        sparkSeries: S.ref_sell.d, asof: niceDate(rs[0]), title: `The central bank's official sell (318) and buy (317) exchange rates; spread ₡${fmt(rs[1] - rb[1])}` }),
+      tile({ k: "MONEX volume", v: `$${fmt(L[6] / 1e6, 1)}M`, d: `<span>20-day avg $${fmt(avg20, 1)}M</span>`,
+        sparkSeries: vol, asof: niceDate(L[0]), title: `US dollars traded on MONEX in the latest session, ${fmt(L[7], 0)} trades (BCCR 3446)` }),
+      simple("tpm", `Policy rate (<abbr title="Tasa de política monetaria">TPM</abbr>)`, 2, " pp", { suffix: "%" }),
+      simple("tbp", `Deposit benchmark (<abbr title="Tasa básica pasiva">TBP</abbr>)`, 2, " pp", { suffix: "%" }),
+      simple("ipc_yoy", `Inflation (<abbr title="Consumer price index, year-on-year change">CPI y/y</abbr>)`, 2, " pp", { suffix: "%" }),
+      simple("exp_inf_12m", `<abbr title="Median 12-month-ahead inflation forecast from the BCCR expectations survey">Expected inflation</abbr>`, 2, " pp", { suffix: "%" }),
+      simple("imae_yoy", `Activity growth (<abbr title="Monthly index of economic activity, trend-cycle, year-on-year">IMAE y/y</abbr>)`, 2, " pp", { suffix: "%" }),
+      fdi4 == null ? "" : tile({ k: `<abbr title="Foreign direct investment, sum of the last four quarters">FDI, last 4 quarters</abbr>`,
+        v: `$${fmt(fdi4 / 1e3, 2)}B`, d: fdi4prev == null ? "" : delta(fdi4 / 1e3, fdi4prev / 1e3, 2, "B y/y"),
+        sparkSeries: fdiSeries, asof: `to ${quarter(tot[n][0])}`, title: "Foreign direct investment inflows, rolling one-year total (BCCR table 368)" }),
+      fzShare == null ? "" : tile({ k: "Free-zone share of FDI", v: `${fmt(fzShare, 0)}%`,
+        d: `<span>of 4-quarter FDI</span>`, sparkSeries: fzSeries, asof: `to ${quarter(tot[n][0])}`,
+        title: "Share of FDI going to companies in free trade zones (zonas francas)" }),
+      simple("rin", `Net reserves (<abbr title="Reservas internacionales netas">RIN</abbr>)`, 2, "", { prefix: "$", suffix: "B", scale: 1e-3 }),
+      simple("sofr", `US overnight rate (<abbr title="Secured Overnight Financing Rate">SOFR</abbr>)`, 2, " pp", { suffix: "%" }),
     ].join("");
+  }
+
+  // ---------- FDI ----------
+  const REGIME_EN = { 23147: "Regular companies", 23148: "Tourism", 23149: "Financial system",
+    23150: "Free trade zones", 23151: "Inward processing", 23152: "Real estate" };
+  const COUNTRY_EN = { "E.E.U.U.": "United States", "Suiza": "Switzerland", "México": "Mexico", "Colombia": "Colombia",
+    "Bélgica": "Belgium", "España": "Spain", "Alemania": "Germany", "Holanda": "Netherlands", "Francia": "France",
+    "Inglaterra": "United Kingdom", "Italia": "Italy", "Canadá": "Canada", "Panamá": "Panama", "Guatemala": "Guatemala",
+    "El Salvador": "El Salvador", "Honduras": "Honduras", "Nicaragua": "Nicaragua", "Argentina": "Argentina",
+    "Brasil": "Brazil", "Chile": "Chile", "Venezuela": "Venezuela", "Islas Caimán": "Cayman Islands", "China": "China",
+    "Corea": "South Korea", "Japón": "Japan", "Taiwán": "Taiwan", "República Dominicana": "Dominican Republic",
+    "Inmobiliaria": "Real estate (individuals)" };
+  const COUNTRY_AGGREGATES = new Set(["América Central", "América del Norte", "Otros relevantes de América",
+    "Relevantes de Europa", "Relevantes de Asia", "Otros Países", "Otros países"]);   // regions and the residual
+  const ACTIVITY_EN = { 23102: "Agriculture & fishing (A)", 23103: "Mining (B)", 23104: "Manufacturing (C)",
+    23105: "Utilities (D,E)", 23106: "Construction (F)", 23107: "Wholesale & retail trade (G)",
+    23108: "Transport & storage (H)", 23109: "Hotels & restaurants (I)", 23110: "Other services (R–U)",
+    38585: "Info & communications (J)", 38586: "Finance & insurance (K)", 38587: "Real estate (L)",
+    38588: "Business services (M,N)", 38589: "Public administration (O)",
+    38590: "Education & health (P,Q)" };
+
+  function fdi(key) {
+    const t = S[key] || { indicators: [] };
+    const byCode = {}; t.indicators.forEach((i) => { byCode[i.code] = i.d; });
+    return { indicators: t.indicators, byCode };
+  }
+
+  function renderFdiRegime(t) {
+    const f = fdi("fdi_q_regime");
+    const total = (f.byCode[23145] || []).map(([d, v]) => [toTs(d), v]);
+    const codes = [23150, 23147, 23152, 23148, 23151, 23149];   // largest first, fixed colour order
+    const series = codes.map((c, j) => ({
+      name: REGIME_EN[c], type: "bar", stack: "fdi", stackStrategy: "samesign", barMaxWidth: 18,
+      data: (f.byCode[c] || []).map(([d, v]) => [toTs(d), +v.toFixed(1)]),
+      itemStyle: { color: t.s[j % t.s.length], borderColor: t.panel, borderWidth: 1 },
+      emphasis: { focus: "series" },
+    }));
+    series[5].itemStyle.color = t.ink3;    // 6th category: neutral, palette has 5 slots here
+    series.push(line("Total", total, t.ink, { lineStyle: { width: 1.5, color: t.ink, type: "dashed" }, z: 5 }));
+    chart("c-fdi-regime").setOption(Object.assign(base(t), {
+      legend: Object.assign(base(t).legend, { type: "scroll" }),
+      grid: { left: 8, right: 16, top: 40, bottom: 28, containLabel: true },
+      tooltip: Object.assign(base(t).tooltip, { axisPointer: { type: "shadow" },
+        valueFormatter: (v) => (v == null ? "—" : "$" + fmt(v, 0) + "M") }),
+      xAxis: timeAxis(t), yAxis: valAxis(t, { scale: false, axisLabel: { color: t.ink3, fontFamily: t.mono, fontSize: 11, formatter: "${value}M" } }),
+      dataZoom: zoom(last(total)[0], [0], 60),
+      series,
+    }), true);
+  }
+
+  function rankedBars(id, t, key, nameOf, include, subId, what) {
+    const f = fdi(key);
+    const lastYear = f.indicators.reduce((m, i) => (i.d.length && i.d[i.d.length - 1][0] > m ? i.d[i.d.length - 1][0] : m), "");
+    const yr = +lastYear.slice(0, 4);
+    const rows = f.indicators.filter(include).map((i) => {
+      const at = (y) => { const p = i.d.find((q) => +q[0].slice(0, 4) === y); return p ? p[1] : 0; };
+      const avg = [0, 1, 2, 3, 4].reduce((a, k) => a + at(yr - k), 0) / 5;
+      return { name: nameOf(i), latest: at(yr), avg };
+    }).sort((a, b) => b.latest - a.latest).slice(0, 10).reverse();
+    document.getElementById(subId).textContent =
+      `Annual inflows in US$ millions ${what}: ${yr} compared with the ${yr - 4}–${yr} average.`;
+    chart(id).setOption(Object.assign(base(t), {
+      grid: { left: 8, right: 24, top: 30, bottom: 8, containLabel: true },
+      tooltip: Object.assign(base(t).tooltip, { axisPointer: { type: "shadow" },
+        valueFormatter: (v) => (v == null ? "—" : "$" + fmt(v, 0) + "M") }),
+      xAxis: { type: "value", axisLabel: { color: t.ink3, fontFamily: t.mono, fontSize: 11, formatter: "${value}M" },
+        splitLine: { lineStyle: { color: t.grid } } },
+      yAxis: { type: "category", data: rows.map((r) => r.name), axisTick: { show: false },
+        axisLine: { lineStyle: { color: t.line } }, axisLabel: { color: t.ink2, fontSize: 11.5, width: 190, overflow: "truncate" } },
+      series: [
+        { name: String(yr), type: "bar", data: rows.map((r) => +r.latest.toFixed(1)), barMaxWidth: 12, barGap: "20%",
+          itemStyle: { color: t.s[0], borderRadius: [0, 3, 3, 0] },
+          label: { show: true, position: "right", color: t.ink2, fontFamily: t.mono, fontSize: 10.5, formatter: (p) => fmt(p.value, 0) } },
+        { name: `${yr - 4}–${yr} average`, type: "bar", data: rows.map((r) => +r.avg.toFixed(1)), barMaxWidth: 12,
+          itemStyle: { color: t.s[1], opacity: 0.75, borderRadius: [0, 3, 3, 0] } },
+      ],
+    }), true);
+  }
+
+  function renderFdiCountry(t) {
+    rankedBars("c-fdi-country", t, "fdi_a_country",
+      (i) => COUNTRY_EN[i.name] || i.name,
+      (i) => i.code !== 23093 && !COUNTRY_AGGREGATES.has(i.name),
+      "fdi-country-sub", "from the 10 largest sources");
+  }
+  function renderFdiActivity(t) {
+    rankedBars("c-fdi-activity", t, "fdi_a_activity",
+      (i) => ACTIVITY_EN[i.code] || i.name,
+      (i) => i.code !== 23093,
+      "fdi-activity-sub", "by sector of the receiving company (letters are ISIC sector codes)");
+  }
+  function renderFdiAnnual(t) {
+    const d = (fdi("fdi_a_regime").byCode[23093] || []).map(([x, v]) => [x.slice(0, 4), +(v / 1e3).toFixed(3)]);
+    chart("c-fdi-annual").setOption(Object.assign(base(t), {
+      legend: { show: false },
+      tooltip: Object.assign(base(t).tooltip, { axisPointer: { type: "shadow" }, valueFormatter: (v) => "$" + fmt(v, 2) + "B" }),
+      xAxis: { type: "category", data: d.map((p) => p[0]), axisTick: { show: false }, axisLine: { lineStyle: { color: t.line } },
+        axisLabel: { color: t.ink3, fontFamily: t.mono, fontSize: 11, hideOverlap: true } },
+      yAxis: valAxis(t, { scale: false, axisLabel: { color: t.ink3, fontFamily: t.mono, fontSize: 11, formatter: "${value}B" } }),
+      series: [{ name: "FDI inflows", type: "bar", data: d.map((p) => p[1]), barMaxWidth: 16,
+        itemStyle: { color: t.s[0], borderRadius: [3, 3, 0, 0] } }],
+    }), true);
+  }
+  function renderFdiGam(t) {
+    const f = fdi("fdi_q_regime");
+    const ins = (f.byCode[90758] || []).map(([d, v]) => [toTs(d), +v.toFixed(1)]);
+    const out = (f.byCode[90759] || []).map(([d, v]) => [toTs(d), +v.toFixed(1)]);
+    if (!ins.length) return;
+    chart("c-fdi-gam").setOption(Object.assign(base(t), {
+      tooltip: Object.assign(base(t).tooltip, { axisPointer: { type: "shadow" }, valueFormatter: (v) => "$" + fmt(v, 0) + "M" }),
+      xAxis: timeAxis(t), yAxis: valAxis(t, { scale: false, axisLabel: { color: t.ink3, fontFamily: t.mono, fontSize: 11, formatter: "${value}M" } }),
+      dataZoom: zoom(last(ins)[0], [0], 60),
+      series: [
+        { name: "Inside the GAM", type: "bar", stack: "fz", data: ins, barMaxWidth: 18, itemStyle: { color: t.s[0], borderColor: t.panel, borderWidth: 1 } },
+        { name: "Outside the GAM", type: "bar", stack: "fz", data: out, barMaxWidth: 18, itemStyle: { color: t.s[2], borderColor: t.panel, borderWidth: 1 } },
+      ],
+    }), true);
   }
 
   // ---------- charts ----------
@@ -161,16 +324,20 @@
     const vol = m.map((r, i) => ({ value: [ts[i], r[6] / 1e6],
       itemStyle: { color: r[4] >= r[1] ? t.up : t.down, opacity: 0.55 } }));
     chart("c-monex").setOption(Object.assign(base(t), {
-      legend: Object.assign(base(t).legend, { data: ["OHLC", "VWAP", "Volume (USD M)"] }),
+      legend: Object.assign(base(t).legend, { data: ["Session candle", "VWAP", "Volume (US$ M)"] }),
       grid: [
-        { left: 8, right: 16, top: 34, height: "62%", containLabel: true },
-        { left: 8, right: 16, top: "78%", bottom: 24, containLabel: true },
+        { left: 8, right: 16, top: 34, height: "56%", containLabel: true },
+        { left: 8, right: 16, top: "72%", bottom: 54, containLabel: true },
       ],
       axisPointer: { link: [{ xAxisIndex: "all" }] },
       xAxis: [timeAxis(t, { gridIndex: 0, axisLabel: { show: false } }), timeAxis(t, { gridIndex: 1 })],
       yAxis: [valAxis(t, { gridIndex: 0, axisLabel: { color: t.ink3, fontFamily: t.mono, fontSize: 11, formatter: "₡{value}" } }),
         valAxis(t, { gridIndex: 1, scale: false, splitNumber: 2, axisLabel: { color: t.ink3, fontFamily: t.mono, fontSize: 11, formatter: "${value}M" } })],
-      dataZoom: zoom(endTs, [0, 1]),
+      dataZoom: zoom(endTs, [0, 1], 0, true).map((z) => z.type === "slider"
+        ? Object.assign(z, { textStyle: { color: t.ink3 }, fillerColor: "rgba(127,140,155,0.15)",
+            handleStyle: { color: t.panel, borderColor: t.ink3 }, moveHandleStyle: { color: t.line },
+            dataBackground: { lineStyle: { color: t.ink3, width: 1 }, areaStyle: { color: t.grid } } })
+        : z),
       tooltip: Object.assign(base(t).tooltip, {
         formatter(ps) {
           const i = ps[0].dataIndex, r = m[i];
@@ -179,10 +346,10 @@
         },
       }),
       series: [
-        { name: "OHLC", type: "candlestick", data: ohlc, xAxisIndex: 0, yAxisIndex: 0, barMaxWidth: 10,
+        { name: "Session candle", type: "candlestick", data: ohlc, xAxisIndex: 0, yAxisIndex: 0, barMaxWidth: 10,
           itemStyle: { color: t.up, color0: t.down, borderColor: t.up, borderColor0: t.down } },
         line("VWAP", vwap, t.s[3], { xAxisIndex: 0, yAxisIndex: 0, lineStyle: { width: 1.5, color: t.s[3] } }),
-        { name: "Volume (USD M)", type: "bar", data: vol, xAxisIndex: 1, yAxisIndex: 1, barMaxWidth: 8, itemStyle: { color: t.s[0] } },
+        { name: "Volume (US$ M)", type: "bar", data: vol, xAxisIndex: 1, yAxisIndex: 1, barMaxWidth: 8, itemStyle: { color: t.s[0] } },
       ],
     }), true);
   }
@@ -306,6 +473,7 @@
     renderTiles();
     renderMonex(t); renderPremium(t); renderVol(t); renderRates(t);
     renderTri(t); renderUst(t); renderInf(t); renderImae(t);
+    if (S.fdi_q_regime) { renderFdiRegime(t); renderFdiCountry(t); renderFdiActivity(t); renderFdiAnnual(t); renderFdiGam(t); }
     small("c-rin", t, "rin", t.s[0], "${value}B", 1e-3);
     small("c-eur", t, "eurusd", t.s[4], "{value}");
     small("c-gold", t, "gold", t.s[3], "${value}");

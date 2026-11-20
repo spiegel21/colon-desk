@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Colón Desk</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="USD/CRC, rates, inflation and activity from the Banco Central de Costa Rica, refreshed daily.">
+<meta name="description" content="USD/CRC, rates, inflation, activity and foreign direct investment from the Banco Central de Costa Rica, refreshed every weekday.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -16,27 +16,30 @@
   <div class="wrap top-inner">
     <div class="brand">
       <h1>Colón Desk</h1>
-      <p class="sub">USD/CRC · rates · prices · activity — <span id="updated">loading BCCR data…</span></p>
+      <p class="sub">Costa Rica: dollar–colón market, rates, prices, activity and foreign investment · <span id="updated">loading data from the central bank…</span></p>
     </div>
-    <div class="ranges" role="group" aria-label="Time range">
-      <button type="button" data-range="1M">1M</button>
-      <button type="button" data-range="3M">3M</button>
-      <button type="button" data-range="6M">6M</button>
-      <button type="button" data-range="1Y" aria-pressed="true">1Y</button>
-      <button type="button" data-range="3Y">3Y</button>
-      <button type="button" data-range="5Y">5Y</button>
-      <button type="button" data-range="ALL">All</button>
+    <div class="ranges" role="group" aria-label="Time range for all charts">
+      <button type="button" data-range="1M" title="Last month">1M</button>
+      <button type="button" data-range="3M" title="Last 3 months">3M</button>
+      <button type="button" data-range="6M" title="Last 6 months">6M</button>
+      <button type="button" data-range="1Y" aria-pressed="true" title="Last year">1Y</button>
+      <button type="button" data-range="3Y" title="Last 3 years">3Y</button>
+      <button type="button" data-range="5Y" title="Last 5 years">5Y</button>
+      <button type="button" data-range="ALL" title="Full history">All</button>
     </div>
   </div>
 </header>
 
 <main class="wrap">
   <section class="tiles" id="tiles" aria-label="Latest readings"></section>
+  <p class="hint">Charts scroll with the page. To zoom into a chart, hold <kbd>Ctrl</kbd> (or pinch on a trackpad) while scrolling over it, or use the range buttons at the top. Hover any dotted-underlined term for its meaning; all terms are defined in the <a href="#glossary">glossary</a>.</p>
 
+  <!-- ===== Exchange rate ===== -->
+  <h2 class="section">Exchange rate</h2>
   <section class="block">
     <div class="block-head">
-      <h2>MONEX USD/CRC</h2>
-      <p>Daily session open–high–low–close with the volume-weighted average price (VWAP, BCCR indicator 3439). Bars below: USD traded.</p>
+      <h3><abbr title="Mercado de Monedas Extranjeras: the BCCR-run wholesale FX trading platform where banks and brokers trade dollars for colones">MONEX</abbr> dollar–colón market</h3>
+      <p>Each candle is one trading session: its open, high, low and close price in colones per dollar. The orange line is the session's <abbr title="Volume-weighted average price: the average price of all trades in a session, weighted by the dollars traded">VWAP</abbr> (volume-weighted average price, BCCR indicator 3439). Bars below show dollars traded per session. Drag the handles under the chart to pick a custom window.</p>
     </div>
     <div class="chart tall" id="c-monex" role="img" aria-label="MONEX candlestick chart with VWAP and traded volume"></div>
   </section>
@@ -44,24 +47,26 @@
   <section class="grid2">
     <div class="block">
       <div class="block-head">
-        <h2>MONEX vs BCCR reference</h2>
-        <p>MONEX VWAP minus the mid of the BCCR reference buy/sell rate, in colones.</p>
+        <h3>MONEX vs the official reference rate</h3>
+        <p>MONEX <abbr title="Volume-weighted average price">VWAP</abbr> minus the midpoint of the <abbr title="Banco Central de Costa Rica, the central bank">BCCR</abbr> reference buy and sell rates, in colones. Above zero, the market paid more for dollars than the reference rate implied.</p>
       </div>
       <div class="chart" id="c-premium" role="img" aria-label="MONEX premium to BCCR reference mid"></div>
     </div>
     <div class="block">
       <div class="block-head">
-        <h2>Realized volatility</h2>
-        <p>20-session standard deviation of VWAP log returns, annualized.</p>
+        <h3>Exchange-rate volatility</h3>
+        <p>How much the dollar price moves day to day: the standard deviation of daily VWAP changes over the last 20 sessions, scaled to a yearly figure.</p>
       </div>
       <div class="chart" id="c-vol" role="img" aria-label="20-session realized volatility of USD/CRC"></div>
     </div>
   </section>
 
+  <!-- ===== Rates ===== -->
+  <h2 class="section">Interest rates</h2>
   <section class="block">
     <div class="block-head">
-      <h2>Policy &amp; money-market rates</h2>
-      <p>Tasa de política monetaria (TPM), tasa básica pasiva (TBP) and USD SOFR overnight.</p>
+      <h3>Policy and money-market rates</h3>
+      <p><abbr title="Tasa de política monetaria: the central bank's policy rate">TPM</abbr> is the central bank's policy rate. <abbr title="Tasa básica pasiva: the benchmark deposit rate, a weighted average of what financial institutions pay on colón deposits, calculated weekly by the BCCR">TBP</abbr> is the benchmark rate banks pay on colón deposits. <abbr title="Secured Overnight Financing Rate: the main US dollar overnight benchmark rate">SOFR</abbr> is the US dollar overnight benchmark, shown for comparison.</p>
     </div>
     <div class="chart" id="c-rates" role="img" aria-label="TPM, TBP and SOFR over time"></div>
   </section>
@@ -70,60 +75,145 @@
     <div class="block">
       <div class="block-head head-row">
         <div>
-          <h2>TRI curve</h2>
-          <p>Tasa de referencia interbancaria by tenor: latest vs 3 and 12 months earlier.</p>
+          <h3>Interbank yield curve (<abbr title="Tasa de referencia interbancaria: the interbank reference rate published by the BCCR for each term">TRI</abbr>)</h3>
+          <p>The rate banks quote each other for lending over each term, from 1 week to 5 years: today compared with 3 and 12 months ago.</p>
         </div>
         <div class="seg" role="group" aria-label="Curve currency">
-          <button type="button" data-ccy="CRC" aria-pressed="true">CRC</button>
-          <button type="button" data-ccy="USD">USD</button>
+          <button type="button" data-ccy="CRC" aria-pressed="true" title="Costa Rican colones">CRC</button>
+          <button type="button" data-ccy="USD" title="US dollars">USD</button>
         </div>
       </div>
       <div class="chart" id="c-tri" role="img" aria-label="TRI interbank curve snapshots"></div>
     </div>
     <div class="block">
       <div class="block-head">
-        <h2>US Treasury curve</h2>
-        <p>6M bill to 30Y bond: latest vs 3 and 12 months earlier.</p>
+        <h3>US Treasury yield curve</h3>
+        <p>US government borrowing rates from a 6-month bill to a 30-year bond, today compared with 3 and 12 months ago.</p>
       </div>
       <div class="chart" id="c-ust" role="img" aria-label="US Treasury curve snapshots"></div>
+    </div>
+  </section>
+
+  <!-- ===== Prices & activity ===== -->
+  <h2 class="section">Prices and activity</h2>
+  <section class="grid2">
+    <div class="block">
+      <div class="block-head">
+        <h3>Inflation vs target</h3>
+        <p>Year-on-year change in the consumer price index (<abbr title="Consumer price index (Índice de precios al consumidor, IPC)">CPI</abbr>) and the median 12-month inflation forecast from the BCCR's expectations survey. The green band is the central bank's target: 3% plus or minus 1 percentage point.</p>
+      </div>
+      <div class="chart" id="c-inf" role="img" aria-label="Inflation versus target band"></div>
+    </div>
+    <div class="block">
+      <div class="block-head">
+        <h3>Economic activity (<abbr title="Índice mensual de actividad económica: the monthly index of economic activity, a monthly proxy for GDP">IMAE</abbr>)</h3>
+        <p>The monthly index of economic activity, a monthly stand-in for <abbr title="Gross domestic product">GDP</abbr>. Bars show its year-on-year growth, using the smoothed trend-cycle series (2022 = 100).</p>
+      </div>
+      <div class="chart" id="c-imae" role="img" aria-label="IMAE year-on-year growth"></div>
+    </div>
+  </section>
+
+  <!-- ===== FDI ===== -->
+  <h2 class="section">Foreign direct investment</h2>
+  <section class="block">
+    <div class="block-head">
+      <h3>Foreign direct investment (<abbr title="Foreign direct investment: money foreign owners put into Costa Rican companies they hold a lasting stake in (10% or more), including new capital, reinvested earnings and loans from the parent company">FDI</abbr>) into Costa Rica, by regime</h3>
+      <p>Quarterly inflows in US$ millions, split by the legal regime the receiving company operates under. Free trade zones (<i>zonas francas</i>) are tax-advantaged parks, mostly medical devices and services exporters. Negative values mean foreign owners took money out (disinvestment or loan repayments). Shows at least 5 years.</p>
+    </div>
+    <div class="chart tall" id="c-fdi-regime" role="img" aria-label="Quarterly FDI inflows by regime"></div>
+  </section>
+
+  <section class="grid2">
+    <div class="block">
+      <div class="block-head">
+        <h3>FDI by country of origin</h3>
+        <p id="fdi-country-sub">Annual inflows in US$ millions from the 10 largest source countries, latest year vs the 5-year average.</p>
+      </div>
+      <div class="chart taller" id="c-fdi-country" role="img" aria-label="FDI by country of origin"></div>
+    </div>
+    <div class="block">
+      <div class="block-head">
+        <h3>FDI by economic activity</h3>
+        <p id="fdi-activity-sub">Annual inflows in US$ millions by sector of the receiving company, latest year vs the 5-year average. Letters are the international industry codes (<abbr title="International Standard Industrial Classification of All Economic Activities, the UN's sector codes">ISIC</abbr>).</p>
+      </div>
+      <div class="chart taller" id="c-fdi-activity" role="img" aria-label="FDI by economic activity"></div>
     </div>
   </section>
 
   <section class="grid2">
     <div class="block">
       <div class="block-head">
-        <h2>Inflation vs target</h2>
-        <p>CPI year-on-year and the 12-month expectations survey median. Shaded: BCCR target 3% ± 1 pp.</p>
+        <h3>FDI over the long run</h3>
+        <p>Total annual FDI inflows since 1997, in US$ billions.</p>
       </div>
-      <div class="chart" id="c-inf" role="img" aria-label="Inflation versus target band"></div>
+      <div class="chart" id="c-fdi-annual" role="img" aria-label="Annual FDI inflows since 1997"></div>
     </div>
     <div class="block">
       <div class="block-head">
-        <h2>Economic activity</h2>
-        <p>IMAE trend-cycle, year-on-year change (2022 = 100 series).</p>
+        <h3>Free-zone FDI: inside vs outside the <abbr title="Gran Área Metropolitana: the Greater Metropolitan Area around San José, Heredia, Alajuela and Cartago">GAM</abbr></h3>
+        <p>Quarterly free-zone inflows split between the Greater Metropolitan Area (<i>Gran Área Metropolitana</i>) and the rest of the country, in US$ millions. Published since 2018.</p>
       </div>
-      <div class="chart" id="c-imae" role="img" aria-label="IMAE year-on-year growth"></div>
+      <div class="chart" id="c-fdi-gam" role="img" aria-label="Free-zone FDI inside and outside the GAM"></div>
     </div>
   </section>
 
+  <!-- ===== External ===== -->
+  <h2 class="section">External position and global markets</h2>
   <section class="grid3">
     <div class="block">
-      <div class="block-head"><h2>Net international reserves</h2><p>USD billions, month-end.</p></div>
+      <div class="block-head"><h3>Net international reserves</h3><p>The central bank's foreign-currency reserves net of short-term liabilities (<abbr title="Reservas internacionales netas: net international reserves">RIN</abbr>), US$ billions, month-end.</p></div>
       <div class="chart short" id="c-rin" role="img" aria-label="Net international reserves"></div>
     </div>
     <div class="block">
-      <div class="block-head"><h2>EUR/USD</h2><p>USD per euro.</p></div>
+      <div class="block-head"><h3>Euro vs dollar</h3><p>US dollars per euro (<abbr title="Euro to US dollar exchange rate">EUR/USD</abbr>).</p></div>
       <div class="chart short" id="c-eur" role="img" aria-label="EUR/USD"></div>
     </div>
     <div class="block">
-      <div class="block-head"><h2>Gold</h2><p>USD per troy ounce.</p></div>
+      <div class="block-head"><h3>Gold</h3><p>US dollars per troy ounce.</p></div>
       <div class="chart short" id="c-gold" role="img" aria-label="Gold price"></div>
     </div>
+  </section>
+
+  <!-- ===== Glossary ===== -->
+  <section class="block glossary" id="glossary" aria-labelledby="glossary-h">
+    <h2 id="glossary-h" class="section flush">Glossary</h2>
+    <dl>
+      <div><dt>BCCR</dt><dd>Banco Central de Costa Rica, the central bank and the source of every number on this page.</dd></div>
+      <div><dt>SDDE</dt><dd>Sistema de Divulgación de Datos Económicos, the BCCR's economic data service and API this page reads from.</dd></div>
+      <div><dt>CRC / ₡</dt><dd>Costa Rican colón. <b>USD / $</b>: US dollar. <b>EUR</b>: euro.</dd></div>
+      <div><dt>USD/CRC</dt><dd>Colones per US dollar. A higher number means a weaker colón.</dd></div>
+      <div><dt>MONEX</dt><dd>Mercado de Monedas Extranjeras, the BCCR-run wholesale market where banks and brokers trade dollars for colones each business day.</dd></div>
+      <div><dt>VWAP</dt><dd>Volume-weighted average price: the average price of all trades in a session, weighted by the dollars traded. The BCCR calls it <i>promedio ponderado</i>.</dd></div>
+      <div><dt>Open / high / low / close</dt><dd>First, highest, lowest and last price traded in a MONEX session; together they draw each candle.</dd></div>
+      <div><dt>Reference rate</dt><dd>The BCCR's official daily buy (<i>compra</i>) and sell (<i>venta</i>) exchange rates, computed from the previous day's market trades.</dd></div>
+      <div><dt>Volatility</dt><dd>Standard deviation of daily price changes, annualized by √252 (trading days per year). Higher means bigger day-to-day swings.</dd></div>
+      <div><dt>TPM</dt><dd>Tasa de política monetaria, the central bank's policy rate. It anchors short-term colón interest rates.</dd></div>
+      <div><dt>TBP</dt><dd>Tasa básica pasiva, the benchmark colón deposit rate, a weighted average of what financial institutions pay on deposits. Many loans in colones are priced off it.</dd></div>
+      <div><dt>TRI</dt><dd>Tasa de referencia interbancaria, the interbank reference rate the BCCR publishes for each term (1 week to 60 months), in colones and in dollars.</dd></div>
+      <div><dt>SOFR</dt><dd>Secured Overnight Financing Rate, the main US dollar overnight benchmark.</dd></div>
+      <div><dt>Treasury bill / note / bond</dt><dd>US government debt: bills mature within a year, notes in 2–10 years, bonds in 20–30 years.</dd></div>
+      <div><dt>Yield curve</dt><dd>Interest rates plotted against the length of the loan. An upward slope means longer loans pay more.</dd></div>
+      <div><dt>CPI (IPC)</dt><dd>Consumer price index (Índice de precios al consumidor). Its year-on-year change is the headline inflation rate.</dd></div>
+      <div><dt>Inflation target</dt><dd>The BCCR aims for 3% inflation with a tolerance of ±1 percentage point.</dd></div>
+      <div><dt>IMAE</dt><dd>Índice mensual de actividad económica, the monthly index of economic activity, used as a monthly proxy for GDP. The trend-cycle version removes seasonal and irregular swings.</dd></div>
+      <div><dt>GDP</dt><dd>Gross domestic product, the value of everything produced in the economy.</dd></div>
+      <div><dt>RIN / NIR</dt><dd>Reservas internacionales netas, the central bank's net international reserves.</dd></div>
+      <div><dt>FDI (IED)</dt><dd>Foreign direct investment (inversión extranjera directa): money a foreign owner with a lasting stake of 10% or more puts into a Costa Rican company, including new equity, reinvested earnings and loans from the parent company.</dd></div>
+      <div><dt>Free trade zone</dt><dd>Zona franca: a tax-incentive regime for exporters, home to most medical-device and business-services investment.</dd></div>
+      <div><dt>Inward processing</dt><dd>Perfeccionamiento activo: a customs regime that lets companies import inputs duty-free to process and re-export them.</dd></div>
+      <div><dt>Regular companies</dt><dd>Empresas regulares: companies under the ordinary tax regime, outside any special regime.</dd></div>
+      <div><dt>GAM</dt><dd>Gran Área Metropolitana, the Greater Metropolitan Area around San José, Heredia, Alajuela and Cartago.</dd></div>
+      <div><dt>ISIC letters</dt><dd>Sector codes from the UN's International Standard Industrial Classification, for example C = manufacturing, K = finance and insurance.</dd></div>
+      <div><dt>pp</dt><dd>Percentage points: the plain difference between two percentages (3% to 4% is +1 pp).</dd></div>
+      <div><dt>bps</dt><dd>Basis points: hundredths of a percent (25 bps = 0.25%).</dd></div>
+      <div><dt>y/y</dt><dd>Year-on-year: compared with the same period a year earlier.</dd></div>
+      <div><dt>4Q</dt><dd>Sum of the last four quarters, a rolling one-year total.</dd></div>
+    </dl>
   </section>
 </main>
 
 <footer class="wrap foot">
-  <p>Source: Banco Central de Costa Rica, Sistema de Divulgación de Datos Económicos (SDDE) API. Indicators: 317/318 reference rate · 219 MONEX session table · 3541 TPM · 423 TBP · 432 TRI · 90656 SOFR · 3035–3042 UST · 89638 CPI · 3809 inflation expectations · 95262 IMAE · 304 NIR · 333 EUR · 1979 gold.</p>
+  <p>Source: Banco Central de Costa Rica, Sistema de Divulgación de Datos Económicos (SDDE) API. Indicator codes: 317/318 reference rate · table 219 MONEX sessions · 3541 TPM · 423 TBP · table 432 TRI · 90656 SOFR · 3035–3042 US Treasuries · 89638 CPI · 3809 inflation expectations · 95262 IMAE · 304 net reserves · 333 EUR · 1979 gold · tables 368, 303, 304, 305 foreign direct investment.</p>
   <p id="freshness"></p>
 </footer>
 
