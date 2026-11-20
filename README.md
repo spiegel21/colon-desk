@@ -1,6 +1,8 @@
-# 04 — Colón Desk (BCCR dashboard)
+# Colón Desk (BCCR dashboard)
 
-Static dashboard of USD/CRC (MONEX), Costa Rican rates, inflation, activity and reserves,
+**▶ Live dashboard: https://spiegel21.github.io/colon-desk/** — refreshed weekdays at 14:05 Costa Rica time.
+
+Static dashboard of USD/CRC (MONEX), Costa Rican rates, inflation, activity, foreign direct investment and reserves,
 built from the Banco Central de Costa Rica **SDDE** API
 ([estándar](https://gee.bccr.fi.cr/indicadoreseconomicos/Documentos/DocumentosMetodologiasNotasTecnicas/Estandar_API_SDDE.pdf)).
 
