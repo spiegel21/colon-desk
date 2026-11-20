@@ -44,6 +44,15 @@
     <div class="chart tall" id="c-monex" role="img" aria-label="MONEX candlestick chart with VWAP and traded volume"></div>
   </section>
 
+  <section class="block">
+    <div class="block-head">
+      <h3><abbr title="Banco Central de Costa Rica, the central bank">BCCR</abbr> foreign-exchange intervention, cumulative</h3>
+      <p>Dollars the central bank bought minus dollars it sold in <abbr title="Mercado de Monedas Extranjeras: the BCCR-run wholesale FX market">MONEX</abbr>, day by day, in US$ millions (BCCR table 850). Above zero the BCCR has been a net buyer of dollars, which adds colones and leans against a stronger colón. The solid line adds up <b>stabilization</b> operations only, the BCCR's intervention to calm the exchange rate (including its interventions at the old exchange-rate band limits, 2006–2015). The dashed line also adds the BCCR's <b>own-account</b> purchases for its reserves and its MONEX purchases to cover dollars it sold to the <abbr title="Sector público no bancario: non-bank public sector, mainly state companies such as RECOPE and ICE">SPNB</abbr>. Bars show each day's net amount by type. Totals restart from the beginning of the range selected at the top.</p>
+      <p class="sub" id="int-sub"></p>
+    </div>
+    <div class="chart tall" id="c-intervention" role="img" aria-label="Cumulative BCCR foreign-exchange intervention with daily net operations"></div>
+  </section>
+
   <section class="grid2">
     <div class="block">
       <div class="block-head">
@@ -186,6 +195,10 @@
       <div><dt>VWAP</dt><dd>Volume-weighted average price: the average price of all trades in a session, weighted by the dollars traded. The BCCR calls it <i>promedio ponderado</i>.</dd></div>
       <div><dt>Open / high / low / close</dt><dd>First, highest, lowest and last price traded in a MONEX session; together they draw each candle.</dd></div>
       <div><dt>Reference rate</dt><dd>The BCCR's official daily buy (<i>compra</i>) and sell (<i>venta</i>) exchange rates, computed from the previous day's market trades.</dd></div>
+      <div><dt>FX intervention</dt><dd>Intervención cambiaria: the BCCR buying or selling dollars in MONEX. Net purchases add colones to the economy and support the dollar price; net sales do the opposite.</dd></div>
+      <div><dt>Stabilization operations</dt><dd>Operaciones de estabilización: discretionary BCCR trades meant to smooth sharp exchange-rate moves. Before February 2015 the colón moved inside a band, and the BCCR also had to buy at its floor (<i>límite inferior</i>) and sell at its ceiling (<i>límite superior</i>); this page counts those as stabilization too.</dd></div>
+      <div><dt>Own-account operations</dt><dd>Operaciones propias: dollars the BCCR buys in MONEX for its own needs, mainly to build reserves.</dd></div>
+      <div><dt>SPNB</dt><dd>Sector público no bancario, the non-bank public sector (state companies such as RECOPE and ICE, and the central government). The BCCR sells them dollars directly, off the market, and buys dollars in MONEX to replenish what it sold; only those MONEX purchases count toward the dashed line.</dd></div>
       <div><dt>Volatility</dt><dd>Standard deviation of daily price changes, annualized by √252 (trading days per year). Higher means bigger day-to-day swings.</dd></div>
       <div><dt>TPM</dt><dd>Tasa de política monetaria, the central bank's policy rate. It anchors short-term colón interest rates.</dd></div>
       <div><dt>TBP</dt><dd>Tasa básica pasiva, the benchmark colón deposit rate, a weighted average of what financial institutions pay on deposits. Many loans in colones are priced off it.</dd></div>
@@ -213,7 +226,7 @@
 </main>
 
 <footer class="wrap foot">
-  <p>Source: Banco Central de Costa Rica, Sistema de Divulgación de Datos Económicos (SDDE) API. Indicator codes: 317/318 reference rate · table 219 MONEX sessions · 3541 TPM · 423 TBP · table 432 TRI · 90656 SOFR · 3035–3042 US Treasuries · 89638 CPI · 3809 inflation expectations · 95262 IMAE · 304 net reserves · 333 EUR · 1979 gold · tables 368, 303, 304, 305 foreign direct investment.</p>
+  <p>Source: Banco Central de Costa Rica, Sistema de Divulgación de Datos Económicos (SDDE) API. Indicator codes: 317/318 reference rate · table 219 MONEX sessions · table 850 FX intervention · 3541 TPM · 423 TBP · table 432 TRI · 90656 SOFR · 3035–3042 US Treasuries · 89638 CPI · 3809 inflation expectations · 95262 IMAE · 304 net reserves · 333 EUR · 1979 gold · tables 368, 303, 304, 305 foreign direct investment.</p>
   <p id="freshness"></p>
 </footer>
 

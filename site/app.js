@@ -422,6 +422,94 @@
     }), true);
   }
 
+  // ---------- BCCR FX intervention (table 850, US$ thousands, buys and sells per day) ----------
+  // Net = BCCR purchases − sales, in US$ millions. Positive = the BCCR bought dollars
+  // (adding colones, resisting colón appreciation); negative = it sold dollars.
+  const INT_PARTS = [
+    { key: "stab", name: "Stabilization", buy: [22270, 22268], sell: [22271, 22269] },
+    { key: "own", name: "Own-account (reserves)", buy: [22272], sell: [22273] },
+    { key: "spnb", name: "For public sector (SPNB)", buy: [24102], sell: [24103] },
+  ];
+  function interventionDays() {
+    const f = fdi("fx_intervention");
+    const map = (codes) => {
+      const m = new Map();
+      codes.forEach((c) => (f.byCode[c] || []).forEach(([d, v]) => m.set(d, (m.get(d) || 0) + v / 1000)));
+      return m;
+    };
+    const parts = INT_PARTS.map((p) => ({ ...p, b: map(p.buy), s: map(p.sell) }));
+    const spnbDirect = { b: map([24099]), s: map([24100]) };   // BCCR ↔ SPNB, outside MONEX
+    const first = Math.min(...[].concat(...INT_PARTS.map((p) => p.buy.concat(p.sell)))
+      .map((c) => (f.byCode[c] && f.byCode[c].length ? toTs(f.byCode[c][0][0]) : Infinity)));
+    // One slot per MONEX session (plus any weekday the BCCR traded without a session).
+    const set = new Set(S.monex.d.map((r) => r[0]).filter((d) => toTs(d) >= first));
+    parts.forEach((p) => { p.b.forEach((_, d) => set.add(d)); p.s.forEach((_, d) => set.add(d)); });
+    const days = [...set].sort();
+    return { days, parts, spnbDirect };
+  }
+  const usdM = (v, d = 1) => (v < 0 ? "−$" : "$") + fmt(Math.abs(v), d) + "M";
+  function renderIntervention(t) {
+    if (!S.fx_intervention) return;
+    const { days, parts, spnbDirect } = interventionDays();
+    const net = parts.map((p) => days.map((d) => +((p.b.get(d) || 0) - (p.s.get(d) || 0)).toFixed(3)));
+    const startTs = rangeStart(toTs(last(days)));
+    let si = 0;
+    if (startTs != null) { si = days.findIndex((d) => toTs(d) >= startTs); if (si < 0) si = 0; }
+    // Cumulative from the start of the selected range (the range buttons re-base it).
+    const cumInt = [], cumAll = [];
+    let a = 0, b = 0;
+    days.forEach((d, i) => {
+      if (i < si) { cumInt.push(null); cumAll.push(null); return; }
+      a += net[0][i]; b += net[0][i] + net[1][i] + net[2][i];
+      cumInt.push(+a.toFixed(3)); cumAll.push(+b.toFixed(3));
+    });
+    const sub = document.getElementById("int-sub");
+    if (sub) sub.textContent = `Since ${niceDate(days[si])}: stabilization ${usdM(a)} · all BCCR net MONEX purchases ${usdM(b)}.`;
+    const catAxis = (extra) => Object.assign({
+      type: "category", data: days, axisLine: { lineStyle: { color: t.line } }, axisTick: { show: false },
+      axisLabel: { color: t.ink3, fontFamily: t.mono, fontSize: 11, hideOverlap: true, formatter: sessionLabel },
+      axisPointer: { label: { formatter: (p) => niceDate(p.value) } }, splitLine: { show: false },
+    }, extra);
+    const fmtB = (v) => (Math.abs(v) >= 1000 ? (v < 0 ? "−$" : "$") + fmt(Math.abs(v) / 1000, 1) + "B" : (v < 0 ? "−$" : "$") + fmt(Math.abs(v), 0) + "M");
+    const colors = [t.s[0], t.s[2], t.s[1]];
+    const narrow = document.getElementById("c-intervention").clientWidth < 640;
+    chart("c-intervention").setOption(Object.assign(base(t), {
+      legend: Object.assign(base(t).legend, { data: ["Cumulative stabilization", "Cumulative all purchases", ...parts.map((p) => p.name)] }),
+      grid: [
+        { left: 8, right: 16, top: narrow ? 74 : 40, height: narrow ? "44%" : "50%", containLabel: true },
+        { left: 8, right: 16, top: "70%", bottom: 54, containLabel: true },
+      ],
+      axisPointer: { link: [{ xAxisIndex: "all" }] },
+      xAxis: [catAxis({ gridIndex: 0, axisLabel: { show: false } }), catAxis({ gridIndex: 1 })],
+      yAxis: [valAxis(t, { gridIndex: 0, scale: false, axisLabel: { color: t.ink3, fontFamily: t.mono, fontSize: 11, formatter: fmtB },
+          axisPointer: { label: { formatter: (p) => fmtB(p.value) } } }),
+        valAxis(t, { gridIndex: 1, scale: false, splitNumber: 2, axisLabel: { color: t.ink3, fontFamily: t.mono, fontSize: 11, formatter: "${value}M" },
+          axisPointer: { label: { formatter: (p) => usdM(p.value) } } })],
+      dataZoom: zoom(0, [0, 1], 0).map((z) => Object.assign(z, { startValue: si, endValue: days.length - 1, start: undefined })),
+      tooltip: Object.assign(base(t).tooltip, { confine: true, extraCssText: "white-space: normal; max-width: min(420px, 86vw);",
+        formatter(ps) {
+          const i = ps[0].dataIndex, d = days[i];
+          let h = `<b>${niceDate(d)}</b>`;
+          parts.forEach((p, k) => {
+            const bb = p.b.get(d) || 0, ss = p.s.get(d) || 0;
+            if (bb || ss) h += `<br>${p.name}: ${usdM(net[k][i])}` + (bb && ss ? ` (bought ${usdM(bb)}, sold ${usdM(ss)})` : "");
+          });
+          const db = spnbDirect.b.get(d) || 0, ds = spnbDirect.s.get(d) || 0;
+          if (db || ds) h += `<br><span style="opacity:.75">Direct with public sector (off-MONEX): ` +
+            [ds ? `sold ${usdM(ds)}` : "", db ? `bought ${usdM(db)}` : ""].filter(Boolean).join(", ") + "</span>";
+          if (cumInt[i] != null) h += `<br>Cumulative stabilization: ${usdM(cumInt[i])}<br>Cumulative all purchases: ${usdM(cumAll[i])}`;
+          return h;
+        },
+      }),
+      series: [
+        line("Cumulative stabilization", cumInt, t.s[0], { xAxisIndex: 0, yAxisIndex: 0, step: "end", areaStyle: { color: t.s[0], opacity: 0.08 } }),
+        line("Cumulative all purchases", cumAll, t.s[3], { xAxisIndex: 0, yAxisIndex: 0, step: "end", lineStyle: { width: 2, color: t.s[3], type: "dashed" } }),
+        ...parts.map((p, k) => ({ name: p.name, type: "bar", stack: "net", data: net[k], xAxisIndex: 1, yAxisIndex: 1,
+          barMaxWidth: 8, itemStyle: { color: colors[k] } })),
+      ],
+    }), true);
+  }
+
   function renderPremium(t) {
     const buy = S.ref_buy.d, sell = S.ref_sell.d;
     const mid = new Map(buy.map(([d, v], i) => [d, sell[i] && sell[i][0] === d ? (v + sell[i][1]) / 2 : null]));
@@ -539,7 +627,7 @@
     if (!S) return;
     const t = theme(); T = t;
     renderTiles();
-    renderMonex(t); renderPremium(t); renderVol(t); renderRates(t);
+    renderMonex(t); renderIntervention(t); renderPremium(t); renderVol(t); renderRates(t);
     renderTri(t); renderUst(t); renderInf(t); renderImae(t);
     if (S.fdi_q_regime) { renderFdiRegime(t); renderFdiCountry(t); renderFdiActivity(t); renderFdiAnnual(t); renderFdiGam(t); }
     small("c-rin", t, "rin", t.s[0], "${value}B", 1e-3);
